@@ -1,0 +1,30 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const authRoutes = require('./routes/auth');
+const http = require('http');
+
+require('dotenv').config();
+
+const app = express();
+const server= http.createServer(app);
+
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('Database connected'))
+    .catch(err => {
+        console.error('DB connection error:', err);
+        process.exit(1);
+    });
+
+app.use('/auth', authRoutes); 
+
+
+app.get('/', (req, res) => res.send('API is running'));
+
+require('./socket')(server);
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
