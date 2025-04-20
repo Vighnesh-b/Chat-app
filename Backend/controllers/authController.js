@@ -124,7 +124,7 @@ exports.logout = async (req, res) => {
 
         user.refreshToken = null;
         await user.save();
-
+        console.log(`${user.email} has logged out`);
         res.status(200).json({ message: 'Logged out' });
     } catch (err) {
         console.error(err);
