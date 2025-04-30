@@ -49,7 +49,7 @@ function Login() {
 
   return (
     <>
-      <div className='flex items-center justify-center h-screen w-screen'>
+      <div className='bg-black flex items-center justify-center h-screen w-screen'>
         <div className='bg-gray-400 p-6 rounded-xl  max-w-md'>
           <p className='pb-2 text-3xl'>{isRegister ? 'Register' : 'Login'}</p>
           <p className='pb-2'>{isRegister ? 'Already have an account?' : "New User?"}{' '}
