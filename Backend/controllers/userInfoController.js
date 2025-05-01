@@ -1,10 +1,13 @@
 const UserInfo=require('../models/UserInfo')
 const User=require('../models/User')
+const mongoose=require('mongoose')
+const Message=require('../models/Message')
+
 
 exports.getUsername = async (req, res) => {
   try {
     const { userId } = req.params;
-
+    
     if (!userId) {
       return res.status(400).json({ error: 'UserId is missing' });
     }
@@ -23,7 +26,10 @@ exports.getUsername = async (req, res) => {
 };
 exports.userinfo=async(req,res)=>{
     try{
-    const {userId}=req.body;
+    const {userId}=req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID format' });
+    }
     if(!userId){
         return res.status(400).json({error:'UserId is missing'});
     }
@@ -34,7 +40,7 @@ exports.userinfo=async(req,res)=>{
     res.status(200).json({message:'UserInformation',userInformation});
     }catch(err){
         console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error',res});
     }
 };
 
@@ -141,5 +147,32 @@ exports.sendFriendRequest = async (req, res) => {
       res.status(500).json({ error: 'Server error' });
     }
   };
+  exports.getMessages = async (req, res) => {
+    try {
+      console.log(req.body);
+      const { senderId, receiverId } = req.body;
+  
+      if (!senderId || !receiverId) {
+        return res.status(400).json({ error: 'UserId is missing' });
+      }
+  
+      const userMessages = await Message.findOne({
+        $or: [
+          { user1: senderId, user2: receiverId },
+          { user1: receiverId, user2: senderId }
+        ]
+      });
+  
+      if (!userMessages) {
+        return res.status(404).json({ error: 'No messages found between these users' });
+      }
+  
+      res.status(200).json({ messages: userMessages.messages });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  };
+  
   
   

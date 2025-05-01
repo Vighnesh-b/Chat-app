@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const authRoutes = require('./routes/auth');
 const http = require('http');
 const cors = require('cors');
-const {userinfo,sendFriendRequest,acceptFriendRequest,rejectFriendRequest,getUsername}=require('./controllers/userInfoController');
+const {userinfo,sendFriendRequest,acceptFriendRequest,rejectFriendRequest,getUsername,getMessages}=require('./controllers/userInfoController');
 
 require('dotenv').config();
 
@@ -25,11 +25,12 @@ mongoose.connect(process.env.MONGO_URI)
 
 app.use('/auth', authRoutes);
 
-app.get('/userinfo',userinfo);
+app.get('/userinfo/:userId',userinfo);
 app.post('/sendFriendRequest',sendFriendRequest);
 app.post('/acceptFriendRequest',acceptFriendRequest);
 app.put('/rejectFriendRequest',rejectFriendRequest);
-app.get('/getUsername',getUsername);
+app.get('/getUsername/:userId',getUsername);
+app.post('/getMessages',getMessages);
 
 app.get('/', (req, res) => res.send('API is running'));
 
