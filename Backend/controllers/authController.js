@@ -34,7 +34,7 @@ exports.register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await User.create({ name, email, password: hashedPassword });
 
-        const userInfo=await UserInfo.create({_id:user._id,name:user.name,friendsList:[{friendId:'68132669f73cbb81f4a95291',friendName:'bob'}]});
+        const userInfo=await UserInfo.create({_id:user._id,name:user.name,friendsList:[{friendId:'68132669f73cbb81f4a95291',friendName:'bob'}],outgoingFriendRequests:[],incomingFriendRequests:[]});
         
         res.status(201).json({ message: 'User registered', user });
     } catch (err) {
@@ -115,7 +115,7 @@ exports.refreshToken = async (req, res) => {
 exports.logout = async (req, res) => {
     try {
         const { refreshToken } = req.body;
-
+        
         if (!refreshToken) {
             return res.status(400).json({ error: 'Refresh token required' });
         }

@@ -10,8 +10,24 @@ const UserInfoSchema = new mongoose.Schema({
       required: true
     },
     friendName: { type: String, required: true }
+  }],
+  incomingFriendRequests: [{
+    Id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    Name: { type: String, required: true },
+  }], outgoingFriendRequests: [{
+    Id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    Name: { type: String, required: true },
   }]
+
 });
 
-module.exports=mongoose.model('UserInfo', UserInfoSchema,"UserInfo");
+module.exports = mongoose.model('UserInfo', UserInfoSchema, "UserInfo");
 
