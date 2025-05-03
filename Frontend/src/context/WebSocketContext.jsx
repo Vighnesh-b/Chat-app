@@ -1,4 +1,3 @@
-// src/context/webSocketContext.js
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
 const WebSocketContext = createContext(null);

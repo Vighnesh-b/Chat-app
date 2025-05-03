@@ -1,47 +1,112 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import getRandomProfile from '../components/random_img';
 import { useWebSocket } from '../context/webSocketContext';
 import axios from '../axios';
+import { useNavigate } from 'react-router-dom';
 
 function MessageWindow({ recipient }) {
   const [messageText, setMessageText] = useState('');
   const [messages, setMessages] = useState([]);
-  const { isConnected, sendMessage } = useWebSocket();
-  const user = JSON.parse(localStorage.getItem('user'));
-  const userId = user.id;
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const messagesEndRef = useRef(null);
+  
+  const { isConnected, sendMessage, messages: globalMessages, error } = useWebSocket();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (recipient) {
-      getMessages();
+    try {
+      const userData = JSON.parse(localStorage.getItem('user'));
+      if (!userData) {
+        navigate('/Login');
+        return;
+      }
+      setUser(userData);
+      setUserId(userData.id);
+    } catch (e) {
+      console.error('Failed to parse user data:', e);
+      navigate('/Login');
     }
-  }, [recipient]);
+  }, [navigate]);
 
-  const handleSendMessage = () => {
-    if (messageText.trim() && isConnected && recipient) {
-      const newMessage = {
-        sender: userId,
-        messageText: messageText,
-        timestamp: new Date(),
-      };
-      sendMessage({
-        recipientId: recipient.friendId,
-        text: messageText,
-      });
-      setMessageText('');
-      setMessages((prev) => [...prev, newMessage]);
-    }
-  };
-
-  const getMessages = async () => {
+  const getMessages = useCallback(async () => {
+    if (!recipient || !userId) return;
+    
+    setLoading(true);
     try {
       const res = await axios.post('/getMessages', {
         senderId: userId,
         receiverId: recipient.friendId,
       });
-      setMessages(res.data.messages); 
-      console.log(res.data);
+      setMessages(res.data.messages);
     } catch (err) {
       console.error('Error fetching messages:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [recipient, userId]);
+
+  useEffect(() => {
+    getMessages();
+  }, [getMessages]);
+
+  const filteredGlobalMessages = useMemo(() => {
+    if (!recipient || !userId) return [];
+    
+    return globalMessages.filter(
+      msg =>
+        (msg.sender === recipient.friendId && msg.to === userId) ||
+        (msg.sender === userId && msg.to === recipient.friendId)
+    );
+  }, [globalMessages, recipient, userId]);
+
+  useEffect(() => {
+    if (filteredGlobalMessages.length === 0) return;
+
+    const messageMap = new Map();
+    
+    messages.forEach(msg => {
+      const key = `${msg.timestamp}-${msg.messageText}`;
+      messageMap.set(key, msg);
+    });
+
+    filteredGlobalMessages.forEach(msg => {
+      const key = `${msg.timestamp}-${msg.messageText}`;
+      messageMap.set(key, msg);
+    });
+
+    const uniqueSorted = Array.from(messageMap.values())
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    setMessages(uniqueSorted);
+  }, [filteredGlobalMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !isConnected || !recipient || !userId) return;
+
+    const newMessage = {
+      sender: userId,
+      to: recipient.friendId,
+      messageText: messageText,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, newMessage]);
+    setMessageText('');
+
+    try {
+      await sendMessage({
+        recipientId: recipient.friendId,
+        text: messageText,
+      });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setMessages(prev => prev.filter(m => m.timestamp !== newMessage.timestamp));
     }
   };
 
@@ -60,6 +125,14 @@ function MessageWindow({ recipient }) {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="h-full bg-[#000000] w-full flex items-center justify-center">
+        <p className="text-gray-500 text-lg">Loading user data...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full bg-[#000000] w-full flex flex-col">
       <div className="bg-gray-900 w-full p-5">
@@ -72,18 +145,33 @@ function MessageWindow({ recipient }) {
           <p className="text-white font-bold text-lg">{recipient.friendName}</p>
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-2">
-        {messages.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`max-w-xs p-3 rounded-lg text-white ${
-              msg.sender === userId ? 'bg-blue-600 self-end' : 'bg-gray-700 self-start'
-            }`}
-          >
-            {msg.messageText} {/* Render the messageText */}
+        {loading ? (
+          <div className="flex justify-center">
+            <p className="text-gray-500">Loading messages...</p>
           </div>
-        ))}
+        ) : (
+          messages.map((msg, idx) => (
+            <div
+              key={`${msg.timestamp}-${idx}`}
+              className={`max-w-xs p-3 rounded-lg text-white ${
+                msg.sender === userId ? 'bg-blue-600 self-end' : 'bg-gray-700 self-start'
+              }`}
+            >
+              {msg.messageText}
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
       </div>
+
+      {error && (
+        <div className="bg-red-900 text-white p-2 text-center">
+          Connection error: {error}
+        </div>
+      )}
+
       <div className="bg-black w-full p-4 flex items-center gap-2">
         <input
           type="text"
