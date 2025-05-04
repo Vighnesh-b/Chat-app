@@ -1,112 +1,69 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import getRandomProfile from '../components/random_img';
 import { useWebSocket } from '../context/webSocketContext';
-import axios from '../axios';
 import { useNavigate } from 'react-router-dom';
 
 function MessageWindow({ recipient }) {
   const [messageText, setMessageText] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(null);
-  const [userId, setUserId] = useState(null);
   const messagesEndRef = useRef(null);
-  
-  const { isConnected, sendMessage, messages: globalMessages, error } = useWebSocket();
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     try {
-      const userData = JSON.parse(localStorage.getItem('user'));
-      if (!userData) {
-        navigate('/Login');
-        return;
-      }
-      setUser(userData);
-      setUserId(userData.id);
-    } catch (e) {
-      console.error('Failed to parse user data:', e);
+      return JSON.parse(localStorage.getItem('user')) || null;
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      return null;
+    }
+  });
+  const userId = user?.id;
+
+  const { isConnected, sendMessage, conversations, fetchMessages } = useWebSocket();
+
+  useEffect(() => {
+    if (!user || !user?.id) {
+      localStorage.removeItem('user');
       navigate('/Login');
     }
-  }, [navigate]);
+  }, [user, navigate]);
 
-  const getMessages = useCallback(async () => {
-    if (!recipient || !userId) return;
-    
-    setLoading(true);
-    try {
-      const res = await axios.post('/getMessages', {
-        senderId: userId,
-        receiverId: recipient.friendId,
-      });
-      setMessages(res.data.messages);
-    } catch (err) {
-      console.error('Error fetching messages:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [recipient, userId]);
-
-  useEffect(() => {
-    getMessages();
-  }, [getMessages]);
-
-  const filteredGlobalMessages = useMemo(() => {
+  const currentMessages = useMemo(() => {
     if (!recipient || !userId) return [];
-    
-    return globalMessages.filter(
-      msg =>
-        (msg.sender === recipient.friendId && msg.to === userId) ||
-        (msg.sender === userId && msg.to === recipient.friendId)
+    const messages = conversations[recipient.friendId] || [];
+    return [...messages].sort((a, b) => 
+      new Date(a.timestamp) - new Date(b.timestamp)
     );
-  }, [globalMessages, recipient, userId]);
+  }, [conversations, recipient, userId]);
 
   useEffect(() => {
-    if (filteredGlobalMessages.length === 0) return;
-
-    const messageMap = new Map();
+    const loadMessages = async () => {
+      if (recipient?.friendId && userId) {
+        try {
+          await fetchMessages(recipient.friendId);
+        } catch (error) {
+          console.error('Failed to load messages:', error);
+        }
+      }
+    };
     
-    messages.forEach(msg => {
-      const key = `${msg.timestamp}-${msg.messageText}`;
-      messageMap.set(key, msg);
-    });
-
-    filteredGlobalMessages.forEach(msg => {
-      const key = `${msg.timestamp}-${msg.messageText}`;
-      messageMap.set(key, msg);
-    });
-
-    const uniqueSorted = Array.from(messageMap.values())
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-    setMessages(uniqueSorted);
-  }, [filteredGlobalMessages]);
+    loadMessages();
+  }, [recipient, userId, fetchMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [currentMessages]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !isConnected || !recipient || !userId) return;
 
-    const newMessage = {
-      sender: userId,
-      to: recipient.friendId,
-      messageText: messageText,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-    setMessageText('');
-
     try {
+      setMessageText('');
       await sendMessage({
         recipientId: recipient.friendId,
         text: messageText,
       });
     } catch (error) {
-      console.error('Failed to send message:', error);
-      setMessages(prev => prev.filter(m => m.timestamp !== newMessage.timestamp));
+      console.error('Message send failed:', error);
     }
   };
 
@@ -147,30 +104,18 @@ function MessageWindow({ recipient }) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-2">
-        {loading ? (
-          <div className="flex justify-center">
-            <p className="text-gray-500">Loading messages...</p>
+        {currentMessages.map((msg) => (
+          <div
+            key={msg._id}
+            className={`max-w-xs p-3 rounded-lg text-white ${
+              msg.sender === userId ? 'bg-blue-600 self-end' : 'bg-gray-700 self-start'
+            }`}
+          >
+            {msg.messageText}
           </div>
-        ) : (
-          messages.map((msg, idx) => (
-            <div
-              key={`${msg.timestamp}-${idx}`}
-              className={`max-w-xs p-3 rounded-lg text-white ${
-                msg.sender === userId ? 'bg-blue-600 self-end' : 'bg-gray-700 self-start'
-              }`}
-            >
-              {msg.messageText}
-            </div>
-          ))
-        )}
+        ))}
         <div ref={messagesEndRef} />
       </div>
-
-      {error && (
-        <div className="bg-red-900 text-white p-2 text-center">
-          Connection error: {error}
-        </div>
-      )}
 
       <div className="bg-black w-full p-4 flex items-center gap-2">
         <input

@@ -6,12 +6,10 @@ module.exports = function (server) {
     const wss = new WebSocket.Server({ server });
 
     wss.on('connection', (socket) => {
-        console.log('WebSocket Client Connected');
 
         socket.on('message', async (data) => {
             try {
                 const parsed = JSON.parse(data);
-
                 if (parsed.type === 'register') {
                     socket.userId = parsed.userId;
                     connectedUsers.set(parsed.userId, socket);
@@ -47,8 +45,9 @@ module.exports = function (server) {
                     const recipientSocket = connectedUsers.get(to);
                     if (recipientSocket && recipientSocket.readyState === WebSocket.OPEN) {
                         recipientSocket.send(JSON.stringify({
-                            from,
-                            messageText,
+                            type:'newMessageAlert',
+                            from:from,
+                            messageText:messageText,
                             timestamp: Date.now()
                         }));
                     }

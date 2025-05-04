@@ -1,11 +1,36 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { createContext, useState,useContext, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
+import axios from '../axios';
 
 const WebSocketContext = createContext(null);
+
+const messageReducer = (state, action) => {
+  switch (action.type) {
+    case 'UPDATE_CONVERSATION':
+      return {
+        ...state,
+        [action.conversationId]: action.messages
+      };
+    
+    case 'PREPEND_MESSAGE':
+      return {
+        ...state,
+        [action.conversationId]: [
+          action.message,
+          ...(state[action.conversationId] || [])
+        ]
+      };
+
+    default:
+      return state;
+  }
+};
+
 export const WebSocketProvider = ({ children }) => {
+  const [conversations, dispatch] = useReducer(messageReducer, {});
   const [isConnected, setIsConnected] = useState(false);
-  const [messages, setMessages] = useState([]);
   const ws = useRef(null);
   const reconnectTimer = useRef(null);
+  const user = useRef(JSON.parse(localStorage.getItem('user')));
 
   const cleanup = useCallback(() => {
     if (ws.current) {
@@ -16,10 +41,54 @@ export const WebSocketProvider = ({ children }) => {
       if (ws.current.readyState === WebSocket.OPEN) {
         ws.current.close();
       }
+      ws.current = null;
     }
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
     }
+  }, []);
+
+  const registerUser = useCallback(() => {
+    if (ws.current?.readyState === WebSocket.OPEN && user.current?.id) {
+      ws.current.send(JSON.stringify({
+        type: 'register',
+        userId: user.current.id
+      }));
+    }
+  }, []);
+
+  const fetchMessages = useCallback(async (otherUserId) => {
+    try {
+      const res = await axios.post('/getMessages', {
+        senderId: user.current.id,
+        receiverId: otherUserId
+      });
+      
+      dispatch({
+        type: 'UPDATE_CONVERSATION',
+        conversationId: otherUserId,
+        messages: res.data.messages
+      });
+
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  }, []);
+
+  const handleIncomingMessage = useCallback((message) => {
+    const conversationId = message.sender === user.current.id 
+      ? message.to 
+      : message.sender;
+
+    dispatch({
+      type: 'PREPEND_MESSAGE',
+      conversationId,
+      message: {
+        ...message,
+        _temp: message._id ? undefined : true
+      }
+    });
   }, []);
 
   const connectWebSocket = useCallback(() => {
@@ -28,24 +97,18 @@ export const WebSocketProvider = ({ children }) => {
     ws.current = new WebSocket('ws://localhost:3000');
 
     ws.current.onopen = () => {
-      console.log('WebSocket connected');
       setIsConnected(true);
-      
-      const token = localStorage.getItem('accesstoken');
-      const user=JSON.parse(localStorage.getItem('user'));
-
-      if (token && user.id) {
-        ws.current.send(JSON.stringify({
-          type: 'register',
-          userId:user.id
-        }));
-      }
+      registerUser();
     };
 
-    ws.current.onmessage = (event) => {
+    ws.current.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
-        setMessages(prev => [...prev, message]);
+        
+        if (message.type === 'newMessageAlert') {
+          handleIncomingMessage(message);
+          await fetchMessages(message.from);
+        }
       } catch (error) {
         console.error('Error parsing message:', error);
       }
@@ -53,59 +116,60 @@ export const WebSocketProvider = ({ children }) => {
 
     ws.current.onclose = () => {
       setIsConnected(false);
-      const delay = Math.min(5000, 1000 * Math.pow(2, 5)); 
+      const delay = Math.min(5000, 1000 * Math.pow(2, 5));
       reconnectTimer.current = setTimeout(connectWebSocket, delay);
     };
 
     ws.current.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
-  }, [cleanup]);
+  }, [cleanup, fetchMessages, handleIncomingMessage, registerUser]);
 
   const sendMessage = useCallback((messageData) => {
-    const user=JSON.parse(localStorage.getItem('user'));
-
     if (ws.current?.readyState === WebSocket.OPEN) {
+      const tempId = Date.now().toString();
+      
+      handleIncomingMessage({
+        _id: tempId,
+        sender: user.current.id,
+        to: messageData.recipientId,
+        messageText: messageData.text,
+        timestamp: new Date().toISOString()
+      });
+
       ws.current.send(JSON.stringify({
         type: 'chat',
-        from: user.id,
+        from: user.current.id,
         to: messageData.recipientId,
-        messageText: messageData.text
+        messageText: messageData.text,
+        tempId
       }));
-    } else {
-      console.error('Cannot send message - WebSocket not connected');
     }
-  }, []);
+  }, [handleIncomingMessage]);
 
   useEffect(() => {
-    connectWebSocket();
-    return () => {
-      cleanup();
-    };
-  }, [connectWebSocket, cleanup]);
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const token = localStorage.getItem('accesstoken');
-      const user=JSON.parse(localStorage.getItem('user'));
-      
-      if (token && user.id && ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: 'register',
-          userId:user.id,
-        }));
+    const handleStorageChange = (e) => {
+      if (e.key === 'user') {
+        user.current = JSON.parse(e.newValue);
+        registerUser();
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [registerUser]);
 
-  const value = {
+  useEffect(() => {
+    connectWebSocket();
+    return cleanup;
+  }, [connectWebSocket, cleanup]);
+
+  const value = useMemo(() => ({
     isConnected,
-    messages,
+    conversations,
+    fetchMessages,
     sendMessage
-  };
+  }), [isConnected, conversations,fetchMessages, sendMessage]);
 
   return (
     <WebSocketContext.Provider value={value}>

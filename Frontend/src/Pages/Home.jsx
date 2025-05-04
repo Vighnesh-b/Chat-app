@@ -35,7 +35,7 @@ function Home() {
       setOutgoingList(res.data.userInformation.outgoingFriendRequests);
     } catch (err) {
       console.error('Failed to fetch friend data:', err);
-      showErrorToast('Failed to load friend data');
+      
     }
   };
 
@@ -143,14 +143,12 @@ function Home() {
 
   return (
     <div className="bg-black h-screen w-screen flex">
-      {/* Sidebar */}
       <div className="bg-gray-900 w-1/3 flex flex-col overflow-y-auto h-full space-y-4 p-4">
         <div className="flex justify-between items-center mb-4 mr-2">
           <p className="text-white text-3xl font-bold">SChat</p>
           <LogoutButton />
         </div>
 
-        {/* Navigation Tabs */}
         <div className='flex items-center border-b border-gray-700 pb-2'>
           <p className='text-white text-xl font-bold mr-4'>Friends</p>
           <button 
@@ -177,7 +175,6 @@ function Home() {
           </button>
         </div>
 
-        {/* All Friends List */}
         {window === 'All' && (
           <>
             {friendList.length > 0 ? (
@@ -201,10 +198,8 @@ function Home() {
           </>
         )}
 
-        {/* Pending Requests */}
         {window === 'Pending' && (
           <div className="space-y-4">
-            {/* Incoming Requests */}
             <div>
               <h3 className="text-white font-semibold mb-2">Incoming Requests</h3>
               {incomingList.length > 0 ? (
@@ -244,7 +239,6 @@ function Home() {
               )}
             </div>
 
-            {/* Outgoing Requests */}
             <div>
               <h3 className="text-white font-semibold mb-2">Outgoing Requests</h3>
               {outgoingList.length > 0 ? (
@@ -278,7 +272,6 @@ function Home() {
           </div>
         )}
 
-        {/* Add Friend Section */}
         {window === 'Add Friend' && (
           <div className="space-y-4">
             <input 
@@ -329,7 +322,6 @@ function Home() {
         )}
       </div>
 
-      {/* Chat Window */}
       <div className="w-2/3 h-full">
         <MessageWindow recipient={receiver} />
       </div>

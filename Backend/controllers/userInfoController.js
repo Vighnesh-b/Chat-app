@@ -3,14 +3,12 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const Message = require('../models/Message');
 
-// Helper function for validating ObjectIds
 const validateObjectId = (id) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error('Invalid ID format');
   }
 };
 
-// Helper function for checking user existence
 const checkUserExists = async (userId) => {
   const user = await UserInfo.findById(userId);
   if (!user) throw new Error('User not found');
@@ -61,18 +59,15 @@ exports.sendFriendRequest = async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
     
-    // Validate inputs
     validateObjectId(senderId);
     validateObjectId(receiverId);
     if (senderId === receiverId) throw new Error('Cannot send request to yourself');
 
-    // Check users exist
     const [sender, receiver] = await Promise.all([
       checkUserExists(senderId),
       checkUserExists(receiverId)
     ]);
 
-    // Check existing relationships
     const isAlreadyFriend = sender.friendsList.some(friend => 
       friend.friendId.toString() === receiverId
     );
@@ -85,7 +80,6 @@ exports.sendFriendRequest = async (req, res) => {
     );
     if (hasPendingRequest) throw new Error('Friend request already exists');
 
-    // Update friend requests
     sender.outgoingFriendRequests.push({ 
       Id: receiver._id, 
       Name: receiver.name,
