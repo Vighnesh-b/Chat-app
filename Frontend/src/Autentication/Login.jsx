@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import '../styles.css'
 import { useNavigate } from 'react-router-dom';
 import axios from '../axios';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../components/toast';
 
 function Login() {
   const navigate = useNavigate();
@@ -33,16 +34,16 @@ function Login() {
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
         localStorage.setItem('user', JSON.stringify(data.user));
-        alert('logged in!');
+        showSuccessToast('logged in!');
         navigate('/')
       } else {
-        alert('Registered successfully! Please Login.');
+        showInfoToast('Registered successfully! Please Login.');
         setIsRegister(false);
       }
     }catch (err) {
       console.log('Error:', err);
       const errorMessage = err.response?.data?.error || 'Server error';
-      alert(errorMessage);
+      showErrorToast(errorMessage);
     }
     
   };
